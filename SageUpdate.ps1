@@ -114,13 +114,20 @@ If (Test-Path $CSVfilePath) {
     Import-Module ActiveDirectory
 
     foreach ($user in $SageUsers) {
-        if ($user.STA_0 -eq "R") {
+        $UserManagerDN = $null
+        Try {$UserManagerDN = Get-ADUser -Filter "SamAccountName -eq '$($user.CHEFCTR_0)'" -ErrorAction Stop
+        }
+        catch {
+        LogWrite "No Manager value for $($user.EMPLID_0)"
+        }
+        
+            if ($user.STA_0 -eq "R") {
             LogWrite "$($user.EMPLID_0) is flagged for deletion, disabling account in AD..."
             $firlas = $user.NAM_0.Substring(0, 3) + $user.SURNAME_0.Substring(0, 3)
 
             try {  
-                $disabeUser = (Get-ADUser -Filter "SamAccountName -eq $($user.EMPLID_0)" -ErrorAction Stop)
-                Set-ADUser $disabeUser -Enabled $false
+                $disabeUser = (Get-ADUser -Filter "SamAccountName -eq '$($user.EMPLID_0)'" -ErrorAction Stop)
+                Set-ADUser $disabeUser -Enabled $false -Manager $UserManagerDN
                 LogWrite "        - Disabled $($user.EMPLID_0)"
                 Move-ADObject  $disabeUser -TargetPath $DisabledOU -Confirm:$false -ErrorAction Stop
                 LogWrite "        - Moved AD user $($disabeUser.DistinguishedName) to $($DisabledOU)"
@@ -129,7 +136,7 @@ If (Test-Path $CSVfilePath) {
             catch {
                 try {
                     $disabeUser = Get-ADUser $firlas -ErrorAction Stop
-                    Set-ADUser $disabeUser -Enabled $false
+                    Set-ADUser $disabeUser -Enabled $false -Manager $UserManagerDN
                     LogWrite "        - Disabled $($disabeUser.SamAccountName)"
                     Move-ADObject  $disabeUser -TargetPath $DisabledOU -Confirm:$false -ErrorAction Stop
                     LogWrite "        - Moved AD user $($disabeUser.DistinguishedName) to $($DisabledOU)"
@@ -150,7 +157,7 @@ If (Test-Path $CSVfilePath) {
             if ($user.EMPLID_0 -eq $ADUser.SamAccountName) {
                 LogWrite "User: $($ADUser.SamAccountName) ($($ADUser.GivenName) $($ADUser.Surname)) matches: $($user.EMPLID_0). Updating Details..."
                 try {
-                    Set-ADUser $ADUser -EmployeeID $user.EMPLID_0 -GivenName $User.NAM_0 -Surname $user.SURNAME_0 -Department $user.ETRSRV_0 -ErrorAction Stop
+                    Set-ADUser $ADUser -EmployeeID $user.EMPLID_0 -GivenName $User.NAM_0 -Surname $user.SURNAME_0 -Department $user.ETRSRV_0 -Manager $UserManagerDN -ErrorAction Stop
                     LogWrite -Success "Updated $($ADUser.DistinguishedName) details in AD"
                     $UpdatedUsersCount += 1
                     LogWrite -LogOnly "-------------------------------------------------------------------------------"
@@ -171,7 +178,7 @@ If (Test-Path $CSVfilePath) {
                 $firlas = $user.NAM_0.Substring(0, 3) + $user.SURNAME_0.Substring(0, 3)
                 try {
                     $NonADuser = Get-ADUser $firlas -ErrorAction SilentlyContinue
-                    Set-ADUser $NonADuser -EmployeeID $user.EMPLID_0 -GivenName $User.NAM_0 -Surname $user.SURNAME_0 -Department $user.ETRSRV_0 -ErrorAction Stop
+                    Set-ADUser $NonADuser -EmployeeID $user.EMPLID_0 -GivenName $User.NAM_0 -Surname $user.SURNAME_0 -Department $user.ETRSRV_0 -Manager $UserManagerDN -ErrorAction Stop
                     Logwrite -Success "Found a user in AD $($NonADuser.SamAccountName) that matches the OLD username format of FIRLAS, updating details but not SamAccountName..."
                     LogWrite -Success "Updated $($NonADuser.DistinguishedName) details in AD"
                     $UpdatedUsersCount += 1
@@ -182,7 +189,7 @@ If (Test-Path $CSVfilePath) {
                     $firstname = $user.NAM_0
                     $LastName = $user.SURNAME_0
                     try {
-                        New-ADUser -SamAccountName $User.EMPLID_0 -Name $firstname' '$LastName -DisplayName $FirstName' '$LastName -GivenName $firstname -Surname $LastName -EmployeeID $user.EMPLID_0 -Department $user.ETRSRV_0 <# -OtherAttributes @{'extensionAttribute5' = "User Created by PowerShell Script on $($env:COMPUTERNAME)"} #> -Path $NewUserOU -AccountPassword (ConvertTo-SecureString -AsPlainText '53cr3tP@ssw0rd' -Force) -Enabled $False -Server $ADServer -Credential $credentials -ErrorAction stop
+                        New-ADUser -SamAccountName $User.EMPLID_0 -Name $firstname' '$LastName -DisplayName $FirstName' '$LastName -GivenName $firstname -Surname $LastName -EmployeeID $user.EMPLID_0 -Department $user.ETRSRV_0 -Manager $UserManagerDN <# -OtherAttributes @{'extensionAttribute5' = "User Created by PowerShell Script on $($env:COMPUTERNAME)"} #> -Path $NewUserOU -AccountPassword (ConvertTo-SecureString -AsPlainText '53cr3tP@ssw0rd' -Force) -Enabled $False -Server $ADServer -Credential $credentials -ErrorAction stop
                         LogWrite -Success "Created new user $($User.EMPLID_0) in $($NewUserOU)"
                         LogWrite -LogOnly "-------------------------------------------------------------------------------"
                         $NewUsersCount += 1
@@ -190,7 +197,7 @@ If (Test-Path $CSVfilePath) {
                     catch {
                         Logwrite -Err "Name already exists, appending character to mitigate duplication in the Name"
                         try {
-                            New-ADUser -SamAccountName $User.EMPLID_0 -Name $firstname' '$LastName' ('$($User.EMPLID_0)')' -DisplayName $FirstName' '$LastName' ('$($User.EMPLID_0)')' -GivenName $firstname -Surname $LastName -EmployeeID $user.EMPLID_0 -Department $user.ETRSRV_0 <# -OtherAttributes @{'extensionAttribute5' = "User Created by PowerShell Script on $($env:COMPUTERNAME)"} #> -Path $NewUserOU -AccountPassword (ConvertTo-SecureString -AsPlainText '53cr3tP@ssw0rd' -Force) -Enabled $False -Server $ADServer -Credential $credentials -ErrorAction stop
+                            New-ADUser -SamAccountName $User.EMPLID_0 -Name $firstname' '$LastName' ('$($User.EMPLID_0)')' -DisplayName $FirstName' '$LastName' ('$($User.EMPLID_0)')' -GivenName $firstname -Surname $LastName -EmployeeID $user.EMPLID_0 -Department $user.ETRSRV_0 -Manager $UserManagerDN <# -OtherAttributes @{'extensionAttribute5' = "User Created by PowerShell Script on $($env:COMPUTERNAME)"} #> -Path $NewUserOU -AccountPassword (ConvertTo-SecureString -AsPlainText '53cr3tP@ssw0rd' -Force) -Enabled $False -Server $ADServer -Credential $credentials -ErrorAction stop
                         }
                         catch {
                             LogWrite -Err "        -Unable to add user in AD: $($user.EMPLID_0). Consult the log file $($Logfile)"
