@@ -105,9 +105,11 @@ If (Test-Path $CSVfilePath) {
 
     if (Get-Module -ListAvailable -Name ActiveDirectory) {
         LogWrite -Success "AD Module exists"
+        LogWrite -LogOnly "-------------------------------------------------------------------------------"
     }
     else {
         LogWrite -Err "AD Module does not exist. Please install ActiveDirectory PowerShell module"
+        LogWrite -LogOnly "-------------------------------------------------------------------------------"
         Break
     }
 
@@ -131,6 +133,7 @@ If (Test-Path $CSVfilePath) {
                 LogWrite "        - Disabled $($user.EMPLID_0)"
                 Move-ADObject  $disabeUser -TargetPath $DisabledOU -Confirm:$false -ErrorAction Stop
                 LogWrite "        - Moved AD user $($disabeUser.DistinguishedName) to $($DisabledOU)"
+                LogWrite -LogOnly "-------------------------------------------------------------------------------"
                 $DisabledCount += 1
             }
             catch {
@@ -140,11 +143,13 @@ If (Test-Path $CSVfilePath) {
                     LogWrite "        - Disabled $($disabeUser.SamAccountName)"
                     Move-ADObject  $disabeUser -TargetPath $DisabledOU -Confirm:$false -ErrorAction Stop
                     LogWrite "        - Moved AD user $($disabeUser.DistinguishedName) to $($DisabledOU)"
+                    LogWrite -LogOnly "-------------------------------------------------------------------------------"
                     $DisabledCount += 1
                 }
                 catch {
                     LogWrite -Err "        -AD User doesn't exsist or can't be found: $($user.EMPLID_0)"
                     LogWrite -LogOnly "        -Skipping $($user.EMPLID_0)"
+                    LogWrite -LogOnly "-------------------------------------------------------------------------------"
                     $FaileduserCount += 1
                 }
             }
