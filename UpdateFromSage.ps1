@@ -1,7 +1,8 @@
 # ----------------------------------------------------------------------------- 
 # Script: UpdateFromSage.ps1 
+# Version: 2.0
 # Author: Matthew Levy 
-# Date: 07/20/2018 11:32:38 
+# Date: 10/04/2018 11:32:38 
 # Keywords: AD Update, CSV, NBConsult
 # comments: NBConsult.co.za
 # Email: support@nbconsult.co.za
@@ -117,6 +118,7 @@ If (Test-Path $CSVfilePath) {
 
     foreach ($user in $SageUsers) {
         $UserManagerDN = $null
+        $department = $null
         Try {$UserManagerDN = Get-ADUser -Filter "SamAccountName -eq '$($user.CHEFCTR_0)'" -ErrorAction Stop
         }
         catch {
@@ -130,6 +132,7 @@ If (Test-Path $CSVfilePath) {
             try {  
                 $disabeUser = (Get-ADUser -Filter "SamAccountName -eq '$($user.EMPLID_0)'" -ErrorAction Stop)
                 Set-ADUser $disabeUser -Enabled $false -Manager $UserManagerDN
+                Set-ADUser $disabeUser -Replace @{AdminDescription = "PowerShell disabled on $(Get-Date) from $($env:COMPUTERNAME)"}
                 LogWrite "        - Disabled $($user.EMPLID_0)"
                 Move-ADObject  $disabeUser -TargetPath $DisabledOU -Confirm:$false -ErrorAction Stop
                 LogWrite "        - Moved AD user $($disabeUser.DistinguishedName) to $($DisabledOU)"
@@ -140,6 +143,7 @@ If (Test-Path $CSVfilePath) {
                 try {
                     $disabeUser = Get-ADUser $firlas -ErrorAction Stop
                     Set-ADUser $disabeUser -Enabled $false -Manager $UserManagerDN
+                    Set-ADUser $disabeUser -Replace @{AdminDescription = "PowerShell disabled on $(Get-Date) from $($env:COMPUTERNAME)"}
                     LogWrite "        - Disabled $($disabeUser.SamAccountName)"
                     Move-ADObject  $disabeUser -TargetPath $DisabledOU -Confirm:$false -ErrorAction Stop
                     LogWrite "        - Moved AD user $($disabeUser.DistinguishedName) to $($DisabledOU)"
@@ -162,10 +166,28 @@ If (Test-Path $CSVfilePath) {
             if ($user.EMPLID_0 -eq $ADUser.SamAccountName) {
                 LogWrite "User: $($ADUser.SamAccountName) ($($ADUser.GivenName) $($ADUser.Surname)) matches: $($user.EMPLID_0). Updating Details..."
                 try {
-                    Set-ADUser $ADUser -EmployeeID $user.EMPLID_0 -GivenName $User.NAM_0 -Surname $user.SURNAME_0 -Department $user.ETRSRV_0 -Manager $UserManagerDN -ErrorAction Stop
-                    LogWrite -Success "Updated $($ADUser.DistinguishedName) details in AD"
-                    $UpdatedUsersCount += 1
-                    LogWrite -LogOnly "-------------------------------------------------------------------------------"
+                    Write-Host -ForegroundColor Yellow "Trying to update user from Line 174"
+                    $department = $user.ETRSRV_0
+                    switch ($department)
+                    {
+                        '' {Write-host -ForegroundColor Magenta "Setting user with no Department";
+                            Set-ADUser $ADUser -EmployeeID $user.EMPLID_0 -GivenName $User.NAM_0 -Surname $user.SURNAME_0 -Manager $UserManagerDN -ErrorAction Stop;
+                            Set-ADUser $ADUser -Replace @{AdminDescription = "PowerShell modified on $(Get-Date) from $($env:COMPUTERNAME)"}
+                            LogWrite -Success "Updated $($ADUser.DistinguishedName) details in AD";
+                            $UpdatedUsersCount += 1;
+                            LogWrite -LogOnly "-------------------------------------------------------------------------------";Break
+                            }
+                        {$department -ne $null} {Write-host -ForegroundColor Green "Setting user with department value";
+                            Set-ADUser $ADUser -EmployeeID $user.EMPLID_0 -GivenName $User.NAM_0 -Surname $user.SURNAME_0 -Department $user.ETRSRV_0 -Manager $UserManagerDN -ErrorAction Stop;
+                            Set-ADUser $ADUser -Replace @{AdminDescription = "PowerShell modified on $(Get-Date) from $($env:COMPUTERNAME)"}
+                            LogWrite -Success "Updated $($ADUser.DistinguishedName) details in AD";
+                            $UpdatedUsersCount += 1;
+                            LogWrite -LogOnly "-------------------------------------------------------------------------------"
+                              }
+    
+                    }
+                    
+                    
                 }
                 catch { 
                     LogWrite -Err "        -Unable to update user in AD: $($user.EMPLID_0). Consult the log file $($Logfile)"
@@ -182,19 +204,38 @@ If (Test-Path $CSVfilePath) {
                 $NonADuser = @()
                 $firlas = $user.NAM_0.Substring(0, 3) + $user.SURNAME_0.Substring(0, 3)
                 try {
+                    Write-Host -ForegroundColor Yellow "Trying to update user from Line 213"
                     $NonADuser = Get-ADUser $firlas -ErrorAction SilentlyContinue
-                    Set-ADUser $NonADuser -EmployeeID $user.EMPLID_0 -GivenName $User.NAM_0 -Surname $user.SURNAME_0 -Department $user.ETRSRV_0 -Manager $UserManagerDN -ErrorAction Stop
-                    Logwrite -Success "Found a user in AD $($NonADuser.SamAccountName) that matches the OLD username format of FIRLAS, updating details but not SamAccountName..."
-                    LogWrite -Success "Updated $($NonADuser.DistinguishedName) details in AD"
-                    $UpdatedUsersCount += 1
-                    LogWrite -LogOnly "-------------------------------------------------------------------------------"
+                    $department = $user.ETRSRV_0
+                    switch ($department)
+                    {
+                        '' {Write-host -ForegroundColor Magenta "Setting user with no Department";
+                            Set-ADUser $NonADuser -EmployeeID $user.EMPLID_0 -GivenName $User.NAM_0 -Surname $user.SURNAME_0 -Manager $UserManagerDN -ErrorAction Stop;
+                            Set-ADUser $NonADuser -Replace @{AdminDescription = "PowerShell modified on $(Get-Date) from $($env:COMPUTERNAME)"};
+                            Logwrite -Success "Found a user in AD $($NonADuser.SamAccountName) that matches the OLD username format of FIRLAS, updating details but not SamAccountName...";
+                            LogWrite -Success "Updated $($NonADuser.DistinguishedName) details in AD";
+                            $UpdatedUsersCount += 1;
+                            LogWrite -LogOnly "-------------------------------------------------------------------------------";Break}
+                        {$department -ne $null} {Write-host -ForegroundColor Green "Setting user with department value";
+                            Set-ADUser $NonADuser -EmployeeID $user.EMPLID_0 -GivenName $User.NAM_0 -Surname $user.SURNAME_0 -Department $user.ETRSRV_0 -Manager $UserManagerDN -ErrorAction Stop;
+                            Set-ADUser $NonADuser -Replace @{AdminDescription = "PowerShell modified on $(Get-Date) from $($env:COMPUTERNAME)"};
+                            Logwrite -Success "Found a user in AD $($NonADuser.SamAccountName) that matches the OLD username format of FIRLAS, updating details but not SamAccountName...";
+                            LogWrite -Success "Updated $($NonADuser.DistinguishedName) details in AD";
+                            $UpdatedUsersCount += 1;
+                            LogWrite -LogOnly "-------------------------------------------------------------------------------"}
+                            
+                     }
                 }
                 catch {}
                 if (!($NonADuser)) {
                     $firstname = $user.NAM_0
                     $LastName = $user.SURNAME_0
+                    
+                    # Creates New User
                     try {
-                        New-ADUser -SamAccountName $User.EMPLID_0 -Name $firstname' '$LastName -DisplayName $FirstName' '$LastName -GivenName $firstname -Surname $LastName -EmployeeID $user.EMPLID_0 -Department $user.ETRSRV_0 -Manager $UserManagerDN <# -OtherAttributes @{'extensionAttribute5' = "User Created by PowerShell Script on $($env:COMPUTERNAME)"} #> -Path $NewUserOU -AccountPassword (ConvertTo-SecureString -AsPlainText '53cr3tP@ssw0rd' -Force) -Enabled $False -Server $ADServer -Credential $credentials -ErrorAction stop
+                        Write-Host -ForegroundColor Yellow "Creating new user from Line 237"
+                        New-ADUser -SamAccountName $User.EMPLID_0 -Name $firstname' '$LastName -DisplayName $FirstName' '$LastName -GivenName $firstname -Surname $LastName -EmployeeID $user.EMPLID_0 -Department $user.ETRSRV_0 -Manager $UserManagerDN -Path $NewUserOU -AccountPassword (ConvertTo-SecureString -AsPlainText '53cr3tP@ssw0rd' -Force) -Enabled $False -Server $ADServer -Credential $credentials -ErrorAction stop
+                        Set-ADUser $User.EMPLID_0 -Replace @{AdminDescription = "PowerShell created on $(Get-Date) from $($env:COMPUTERNAME)"}
                         LogWrite -Success "Created new user $($User.EMPLID_0) in $($NewUserOU)"
                         LogWrite -LogOnly "-------------------------------------------------------------------------------"
                         $NewUsersCount += 1
@@ -202,7 +243,12 @@ If (Test-Path $CSVfilePath) {
                     catch {
                         Logwrite -Err "Name already exists, appending character to mitigate duplication in the Name"
                         try {
-                            New-ADUser -SamAccountName $User.EMPLID_0 -Name $firstname' '$LastName' ('$($User.EMPLID_0)')' -DisplayName $FirstName' '$LastName' ('$($User.EMPLID_0)')' -GivenName $firstname -Surname $LastName -EmployeeID $user.EMPLID_0 -Department $user.ETRSRV_0 -Manager $UserManagerDN <# -OtherAttributes @{'extensionAttribute5' = "User Created by PowerShell Script on $($env:COMPUTERNAME)"} #> -Path $NewUserOU -AccountPassword (ConvertTo-SecureString -AsPlainText '53cr3tP@ssw0rd' -Force) -Enabled $False -Server $ADServer -Credential $credentials -ErrorAction stop
+                            Write-host -ForegroundColor Yellow "Creating new user from Line 246"
+                            New-ADUser -SamAccountName $User.EMPLID_0 -Name $firstname' '$LastName' ('$($User.EMPLID_0)')' -DisplayName $FirstName' '$LastName' ('$($User.EMPLID_0)')' -GivenName $firstname -Surname $LastName -EmployeeID $user.EMPLID_0 -Department $user.ETRSRV_0 -Manager $UserManagerDN -Path $NewUserOU -AccountPassword (ConvertTo-SecureString -AsPlainText '53cr3tP@ssw0rd' -Force) -Enabled $False -Server $ADServer -Credential $credentials -ErrorAction stop
+                            Set-ADUser $User.EMPLID_0 -Replace @{AdminDescription = "PowerShell created on $(Get-Date) from $($env:COMPUTERNAME)"}
+                            LogWrite -Success "Created new user $firstname $LastName ($($User.EMPLID_0)) in $($NewUserOU)"
+                            LogWrite -LogOnly "-------------------------------------------------------------------------------"
+                            $NewUsersCount += 1
                         }
                         catch {
                             LogWrite -Err "        -Unable to add user in AD: $($user.EMPLID_0). Consult the log file $($Logfile)"
