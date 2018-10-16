@@ -181,13 +181,13 @@ If (Test-Path $CSVfilePath) {
       
         }
 
-        #   Set's an existing user's details
+        #   Sets an existing user's details
         else {
             $ADUser = Get-ADUser -Filter "SamAccountName -eq '$($user.EMPLID_0)'" -Credential $credentials
             if ($user.EMPLID_0 -eq $ADUser.SamAccountName) {
                 LogWrite "User: $($ADUser.SamAccountName) ($($ADUser.GivenName) $($ADUser.Surname)) matches: $($user.EMPLID_0). Updating Details..."
                 try {
-                    Write-Host -ForegroundColor Yellow "Trying to update user from Line 194"
+                    Write-Host -ForegroundColor Yellow "Trying to update user from Line 195"
                     $department = $user.ETRSRV_0
                     switch ($department) {
                         '' {
@@ -227,7 +227,7 @@ If (Test-Path $CSVfilePath) {
                 $NonADuser = @()
                 $firlas = $user.NAM_0.Substring(0, 3) + $user.SURNAME_0.Substring(0, 3)
                 try {
-                    Write-Host -ForegroundColor Yellow "Trying to update user from Line 213"
+                    Write-Host -ForegroundColor Yellow "Trying to update user from Line 236"
                     $NonADuser = Get-ADUser $firlas -Credential $credentials -ErrorAction SilentlyContinue
                     $department = $user.ETRSRV_0
                     switch ($department) {
@@ -259,7 +259,7 @@ If (Test-Path $CSVfilePath) {
                     
                     # Creates New User
                     try {
-                        Write-Host -ForegroundColor Yellow "Creating new user from Line 237"
+                        Write-Host -ForegroundColor Yellow "Creating new user from Line 263"
                         New-ADUser -SamAccountName $User.EMPLID_0 -Name $firstname' '$LastName -UserPrincipalName "$($user.EMPLID_0)@capeunionmart.co.za" -DisplayName $FirstName' '$LastName -GivenName $firstname -Surname $LastName -EmployeeID $user.EMPLID_0 -Department $user.ETRSRV_0 -Manager $UserManagerDN -Office $office -employeeNumber $contract -Title $Title -Path $NewUserOU -AccountPassword (ConvertTo-SecureString -AsPlainText 'vNW7b}[%|y2E' -Force) -Enabled $False -Server $ADServer -Credential $credentials -ErrorAction stop
                         Set-ADUser $User.EMPLID_0 -Replace @{AdminDescription = "PowerShell created on $(Get-Date) from $($env:COMPUTERNAME)"} -Credential $credentials
                         LogWrite -Success "Created new user $($User.EMPLID_0) in $($NewUserOU)"
@@ -269,7 +269,7 @@ If (Test-Path $CSVfilePath) {
                     catch {
                         Logwrite -Err "Name already exists, appending character to mitigate duplication in the Name"
                         try {
-                            Write-host -ForegroundColor Yellow "Creating new user from Line 246"
+                            Write-host -ForegroundColor Yellow "Creating new user from Line 273"
                             New-ADUser -SamAccountName $User.EMPLID_0 -Name $firstname' '$LastName' ('$($User.EMPLID_0)')' -UserPrincipalName "$($user.EMPLID_0)@capeunionmart.co.za" -DisplayName $FirstName' '$LastName' ('$($User.EMPLID_0)')' -GivenName $firstname -Surname $LastName -EmployeeID $user.EMPLID_0 -Department $user.ETRSRV_0 -Manager $UserManagerDN -Office $office -employeeNumber $contract -Title $Title -Path $NewUserOU -AccountPassword (ConvertTo-SecureString -AsPlainText 'vNW7b}[%|y2E' -Force) -Enabled $False -Server $ADServer -Credential $credentials -ErrorAction stop
                             Set-ADUser $User.EMPLID_0 -Replace @{AdminDescription = "PowerShell created on $(Get-Date) from $($env:COMPUTERNAME)"} -Credential $credentials
                             LogWrite -Success "Created new user $firstname $LastName ($($User.EMPLID_0)) in $($NewUserOU)"
