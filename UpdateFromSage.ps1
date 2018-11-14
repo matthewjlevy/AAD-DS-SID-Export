@@ -1,8 +1,8 @@
 # ----------------------------------------------------------------------------- 
 # Script: UpdateFromSage.ps1 
-# Version: 2.1
+# Version: 2.2
 # Author: Matthew Levy 
-# Date: 16/10/2018 
+# Date: 13/11/2018 
 # Keywords: AD Update, CSV, NBConsult
 # comments: NBConsult.co.za
 # Email: support@nbconsult.co.za
@@ -135,6 +135,11 @@ If (Test-Path $CSVfilePath) {
             {[string]::IsNullOrEmpty($contract)} {$contract = "NotSet"; LogWrite -Err "No Contract value for $($user.EMPLID_0), setting Contract attribute in AD to 'NotSet'"; break}
             {$contract -ne $null} {LogWrite -Success "Contract is not blank"}
         }
+        $contractType = $user.NATCON_0
+        switch ($contractType) {
+            {[string]::IsNullOrEmpty($contractType)} {$contractType = "NotSet"; LogWrite -Err "No Contract Type value for $($user.EMPLID_0), setting EmployeeType attribute in AD to 'NotSet'"; break}
+            {$contractType -ne $null} {LogWrite -Success "Contract Type is not blank"}
+        }
         Try {
             $UserManagerDN = Get-ADUser -Filter "SamAccountName -eq '$($user.CHEFCTR_0)'" -ErrorAction Stop
         }
@@ -150,7 +155,7 @@ If (Test-Path $CSVfilePath) {
             try {  
                 $disabeUser = (Get-ADUser -Filter "SamAccountName -eq '$($user.EMPLID_0)'" -Credential $credentials -ErrorAction Stop)
                 Set-ADUser $disabeUser -Enabled $false -Manager $UserManagerDN -Credential $credentials
-                Set-ADUser $disabeUser -Replace @{AdminDescription = "PowerShell disabled on $(Get-Date) from $($env:COMPUTERNAME)"} -Credential $credentials
+                Set-ADUser $disabeUser -Replace @{AdminDescription = "PowerShell disabled on $(Get-Date) from $($env:COMPUTERNAME)"; employeeType = "$contractType"} -Credential $credentials
                 LogWrite "        - Disabled $($user.EMPLID_0)"
                 Move-ADObject  $disabeUser -TargetPath $DisabledOU -Confirm:$false -Credential $credentials -ErrorAction Stop
                 LogWrite "        - Moved AD user $($disabeUser.DistinguishedName) to $($DisabledOU)"
@@ -163,7 +168,7 @@ If (Test-Path $CSVfilePath) {
                 try {
                     $disabeUser = Get-ADUser $firlas -Credential $credentials -ErrorAction Stop
                     Set-ADUser $disabeUser -Enabled $false -Manager $UserManagerDN -Credential $credentials
-                    Set-ADUser $disabeUser -Replace @{AdminDescription = "PowerShell disabled on $(Get-Date) from $($env:COMPUTERNAME)"} -Credential $credentials
+                    Set-ADUser $disabeUser -Replace @{AdminDescription = "PowerShell disabled on $(Get-Date) from $($env:COMPUTERNAME)"; employeeType = "$contractType"} -Credential $credentials
                     LogWrite "        - Disabled $($disabeUser.SamAccountName)"
                     Move-ADObject  $disabeUser -TargetPath $DisabledOU -Confirm:$false -Credential $credentials -ErrorAction Stop
                     LogWrite "        - Moved AD user $($disabeUser.DistinguishedName) to $($DisabledOU)"
@@ -187,13 +192,13 @@ If (Test-Path $CSVfilePath) {
             if ($user.EMPLID_0 -eq $ADUser.SamAccountName) {
                 LogWrite "User: $($ADUser.SamAccountName) ($($ADUser.GivenName) $($ADUser.Surname)) matches: $($user.EMPLID_0). Updating Details..."
                 try {
-                    Write-Host -ForegroundColor Yellow "Trying to update user from Line 195"
+                    Write-Host -ForegroundColor Yellow "Trying to update user from Line 200"
                     $department = $user.ETRSRV_0
                     switch ($department) {
                         '' {
                             Write-host -ForegroundColor Magenta "Setting user with no Department";
                             Set-ADUser $ADUser -EmployeeID $user.EMPLID_0 -GivenName $User.NAM_0 -Surname $user.SURNAME_0 -Manager $UserManagerDN -Office $office -employeeNumber $contract -Title $Title -Credential $credentials -ErrorAction Stop;
-                            Set-ADUser $ADUser -Replace @{AdminDescription = "PowerShell modified on $(Get-Date) from $($env:COMPUTERNAME)"} -Credential $credentials
+                            Set-ADUser $ADUser -Replace @{AdminDescription = "PowerShell modified on $(Get-Date) from $($env:COMPUTERNAME)"; employeeType = "$contractType"} -Credential $credentials
                             LogWrite -Success "Updated $($ADUser.DistinguishedName) details in AD";
                             $UpdatedUsersCount += 1;
                             LogWrite -LogOnly "-------------------------------------------------------------------------------"; Break
@@ -201,7 +206,7 @@ If (Test-Path $CSVfilePath) {
                         {$department -ne $null} {
                             Write-host -ForegroundColor Green "Setting user with department value";
                             Set-ADUser $ADUser -EmployeeID $user.EMPLID_0 -GivenName $User.NAM_0 -Surname $user.SURNAME_0 -Department $user.ETRSRV_0 -Manager $UserManagerDN -Office $office -employeeNumber $contract -Title $Title -Credential $credentials -ErrorAction Stop;
-                            Set-ADUser $ADUser -Replace @{AdminDescription = "PowerShell modified on $(Get-Date) from $($env:COMPUTERNAME)"} -Credential $credentials
+                            Set-ADUser $ADUser -Replace @{AdminDescription = "PowerShell modified on $(Get-Date) from $($env:COMPUTERNAME)"; employeeType = "$contractType"} -Credential $credentials
                             LogWrite -Success "Updated $($ADUser.DistinguishedName) details in AD";
                             $UpdatedUsersCount += 1;
                             LogWrite -LogOnly "-------------------------------------------------------------------------------"
@@ -234,7 +239,7 @@ If (Test-Path $CSVfilePath) {
                         '' {
                             Write-host -ForegroundColor Magenta "Setting user with no Department";
                             Set-ADUser $NonADuser -EmployeeID $user.EMPLID_0 -GivenName $User.NAM_0 -Surname $user.SURNAME_0 -Manager $UserManagerDN -Office $office -employeeNumber $contract -Title $Title -Credential $credentials -ErrorAction Stop;
-                            Set-ADUser $NonADuser -Replace @{AdminDescription = "PowerShell modified on $(Get-Date) from $($env:COMPUTERNAME)"} -Credential $credentials;
+                            Set-ADUser $NonADuser -Replace @{AdminDescription = "PowerShell modified on $(Get-Date) from $($env:COMPUTERNAME)"; employeeType = "$contractType"} -Credential $credentials;
                             Logwrite -Success "Found a user in AD $($NonADuser.SamAccountName) that matches the OLD username format of FIRLAS, updating details but not SamAccountName...";
                             LogWrite -Success "Updated $($NonADuser.DistinguishedName) details in AD";
                             $UpdatedUsersCount += 1;
@@ -243,7 +248,7 @@ If (Test-Path $CSVfilePath) {
                         {$department -ne $null} {
                             Write-host -ForegroundColor Green "Setting user with department value";
                             Set-ADUser $NonADuser -EmployeeID $user.EMPLID_0 -GivenName $User.NAM_0 -Surname $user.SURNAME_0 -Department $user.ETRSRV_0 -Manager $UserManagerDN -Office $office -employeeNumber $contract -Title $Title -Credential $credentials -ErrorAction Stop;
-                            Set-ADUser $NonADuser -Replace @{AdminDescription = "PowerShell modified on $(Get-Date) from $($env:COMPUTERNAME)"} -Credential $credentials;
+                            Set-ADUser $NonADuser -Replace @{AdminDescription = "PowerShell modified on $(Get-Date) from $($env:COMPUTERNAME)"; employeeType = "$contractType"} -Credential $credentials;
                             Logwrite -Success "Found a user in AD $($NonADuser.SamAccountName) that matches the OLD username format of FIRLAS, updating details but not SamAccountName...";
                             LogWrite -Success "Updated $($NonADuser.DistinguishedName) details in AD";
                             $UpdatedUsersCount += 1;
@@ -261,7 +266,7 @@ If (Test-Path $CSVfilePath) {
                     try {
                         Write-Host -ForegroundColor Yellow "Creating new user from Line 263"
                         New-ADUser -SamAccountName $User.EMPLID_0 -Name $firstname' '$LastName -UserPrincipalName "$($user.EMPLID_0)@capeunionmart.co.za" -DisplayName $FirstName' '$LastName -GivenName $firstname -Surname $LastName -EmployeeID $user.EMPLID_0 -Department $user.ETRSRV_0 -Manager $UserManagerDN -Office $office -employeeNumber $contract -Title $Title -Path $NewUserOU -AccountPassword (ConvertTo-SecureString -AsPlainText 'vNW7b}[%|y2E' -Force) -Enabled $False -Server $ADServer -Credential $credentials -ErrorAction stop
-                        Set-ADUser $User.EMPLID_0 -Replace @{AdminDescription = "PowerShell created on $(Get-Date) from $($env:COMPUTERNAME)"} -Credential $credentials
+                        Set-ADUser $User.EMPLID_0 -Replace @{AdminDescription = "PowerShell created on $(Get-Date) from $($env:COMPUTERNAME)"; employeeType = "$contractType"} -Credential $credentials
                         LogWrite -Success "Created new user $($User.EMPLID_0) in $($NewUserOU)"
                         LogWrite -LogOnly "-------------------------------------------------------------------------------"
                         $NewUsersCount += 1
@@ -271,7 +276,7 @@ If (Test-Path $CSVfilePath) {
                         try {
                             Write-host -ForegroundColor Yellow "Creating new user from Line 273"
                             New-ADUser -SamAccountName $User.EMPLID_0 -Name $firstname' '$LastName' ('$($User.EMPLID_0)')' -UserPrincipalName "$($user.EMPLID_0)@capeunionmart.co.za" -DisplayName $FirstName' '$LastName' ('$($User.EMPLID_0)')' -GivenName $firstname -Surname $LastName -EmployeeID $user.EMPLID_0 -Department $user.ETRSRV_0 -Manager $UserManagerDN -Office $office -employeeNumber $contract -Title $Title -Path $NewUserOU -AccountPassword (ConvertTo-SecureString -AsPlainText 'vNW7b}[%|y2E' -Force) -Enabled $False -Server $ADServer -Credential $credentials -ErrorAction stop
-                            Set-ADUser $User.EMPLID_0 -Replace @{AdminDescription = "PowerShell created on $(Get-Date) from $($env:COMPUTERNAME)"} -Credential $credentials
+                            Set-ADUser $User.EMPLID_0 -Replace @{AdminDescription = "PowerShell created on $(Get-Date) from $($env:COMPUTERNAME)"; employeeType = "$contractType"} -Credential $credentials
                             LogWrite -Success "Created new user $firstname $LastName ($($User.EMPLID_0)) in $($NewUserOU)"
                             LogWrite -LogOnly "-------------------------------------------------------------------------------"
                             $NewUsersCount += 1
