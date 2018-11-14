@@ -122,34 +122,34 @@ If (Test-Path $CSVfilePath) {
         $department = $null
         $office = $user.FCY_0
         switch ($office) {
-            {[string]::IsNullOrEmpty($office)} {$office = "NotSet"; LogWrite -Err "No Office value for $($user.EMPLID_0), setting Office attribute in AD to 'NotSet'"; break}
+            {[string]::IsNullOrEmpty($office)} {$office = "NotSet"; LogWrite "No Office value for $($user.EMPLID_0), setting Office attribute in AD to 'NotSet'"; break}
             {$office -ne $null} {LogWrite -Success "Office is not blank"}
         }
         $Title = $user.POSDES_0
         switch ($Title) {
-            {[string]::IsNullOrEmpty($Title)} {$Title = "NotSet"; LogWrite -Err "No Title value for $($user.EMPLID_0), setting Title attribute in AD to 'NotSet'"; break}
+            {[string]::IsNullOrEmpty($Title)} {$Title = "NotSet"; LogWrite "No Title value for $($user.EMPLID_0), setting Title attribute in AD to 'NotSet'"; break}
             {$Title -ne $null} {LogWrite -Success "Title is not blank"}
         }
         $contract = $user.CTRNUM_0
         switch ($contract) {
-            {[string]::IsNullOrEmpty($contract)} {$contract = "NotSet"; LogWrite -Err "No Contract value for $($user.EMPLID_0), setting Contract attribute in AD to 'NotSet'"; break}
+            {[string]::IsNullOrEmpty($contract)} {$contract = "NotSet"; LogWrite "No Contract value for $($user.EMPLID_0), setting Contract attribute in AD to 'NotSet'"; break}
             {$contract -ne $null} {LogWrite -Success "Contract is not blank"}
         }
         $contractType = $user.NATCON_0
         switch ($contractType) {
-            {[string]::IsNullOrEmpty($contractType)} {$contractType = "NotSet"; LogWrite -Err "No Contract Type value for $($user.EMPLID_0), setting EmployeeType attribute in AD to 'NotSet'"; break}
+            {[string]::IsNullOrEmpty($contractType)} {$contractType = "NotSet"; LogWrite "No Contract Type value for $($user.EMPLID_0), setting EmployeeType attribute in AD to 'NotSet'"; break}
             {$contractType -ne $null} {LogWrite -Success "Contract Type is not blank"}
         }
         $Mobile = $user.MOBILE_0
         switch ($Mobile) {
-            {[string]::IsNullOrEmpty($Mobile)} {$Mobile = "0"; LogWrite -Err "No Mobile value for $($user.EMPLID_0), setting MobilePhone attribute in AD to '0'"; break}
+            {[string]::IsNullOrEmpty($Mobile)} {$Mobile = "0"; LogWrite "No Mobile value for $($user.EMPLID_0), setting MobilePhone attribute in AD to '0'"; break}
             {$Mobile -ne $null} {LogWrite -Success "Mobile is not blank"}
         }
         Try {
             $UserManagerDN = Get-ADUser -Filter "SamAccountName -eq '$($user.CHEFCTR_0)'" -ErrorAction Stop
         }
         catch {
-            LogWrite -Err "No Manager value for $($user.EMPLID_0)"
+            LogWrite "No Manager value for $($user.EMPLID_0)"
         }
         
         if ($user.STA_0 -eq "R") {
