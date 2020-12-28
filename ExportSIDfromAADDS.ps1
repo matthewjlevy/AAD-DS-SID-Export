@@ -115,7 +115,44 @@ If (Test-Path $SourceCSVFilePath) {
     }
 
     Import-Module ActiveDirectory
+$adusers = Get-AdUser -Filter * -Properties name,samaccountname, userprincipalname, sid
 
+foreach ($user in $AIABizUsers) {
+LogWrite -LogOnly "Processing $($user.Name), $($user.UserPrincipalName)"
+    $AADDSUser = @()
+    $AADDSUser = Get-ADUser -Filter "UserPrincipalName -eq '$($user.Userprincipalname)'" |Select SID, UserPrincipalName, SamAccountName
+    if ($AADDSUser)
+    {
+            # Create a new instance of a .Net object
+
+        $mbx = New-Object System.Object
+
+        # Add user-defined customs members: the records retrieved with the three PowerShell commands
+
+        $mbx | Add-Member -MemberType NoteProperty -Value $stats.Displayname -Name DisplayName
+        $mbx | Add-Member -MemberType NoteProperty -Value $mail.OrganizationalUnit -Name OrganizationalUnit
+        $mbx | Add-Member -MemberType NoteProperty -Value $mail.database -Name Database
+        $mbx | Add-Member -MemberType NoteProperty -Value $mail.Alias -Name Alias
+        $mbx | Add-Member -MemberType NoteProperty -Value $mail.Samaccountname -Name Samaccountname
+        $mbx | Add-Member -MemberType NoteProperty -Value $mail.PrimarySmtpAddress -Name PrimarySmtpAddress
+        $mbx | Add-Member -MemberType NoteProperty -value $mail.issuewarningquota -Name WarningQuota
+        $mbx | Add-Member -MemberType NoteProperty -value $mail.prohibitsendquota -Name ProhibitSendQuota
+        $mbx | Add-Member -MemberType NoteProperty -value $mail.ProhibitSendReceiveQuota -Name ProhibitSendReceiveQuota
+        $mbx | Add-Member -MemberType NoteProperty -Value $stats.TotalItemSize.value.ToMB() -Name TotalSizeMB
+
+        # Add right hand operand to value of variable ($mbx) and place result in variable ($mbxStats)
+
+        $mbxStats += $mbx
+    }
+    else
+    {
+            LogWrite -Err "        -AD User doesn't exsist or can't be found: $($user.Userprincipalname)"
+    }
+        }
+}
+
+ #region Disabled for testing
+ <#
     foreach ($user in $AIABizUsers) {
         LogWrite -LogOnly "Processing $($user.EMPLID_0), $($user.NAM_0) $($user.SURNAME_0)"
         $UserManagerDN = $null
@@ -306,7 +343,11 @@ If (Test-Path $SourceCSVFilePath) {
     Logwrite "Failed Users:      |$($FaileduserCount)"
     Logwrite "Rows in CSV:       |$($AIABizUsers.Count)"
     LogWrite "$(Get-Date)"
+
+#>
+#endregion Disabled for testing
 }
+
 Else {
     Write-Host ""
     Write-Host "There's no user csv list to work with."
