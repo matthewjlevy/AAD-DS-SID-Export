@@ -116,6 +116,7 @@ If (Test-Path $SourceCSVFilePath) {
 
     Import-Module ActiveDirectory
 $adusers = Get-AdUser -Filter * -Properties name,samaccountname, userprincipalname, sid
+$UserStats = @()
 
 foreach ($user in $AIABizUsers) {
 LogWrite -LogOnly "Processing $($user.Name), $($user.UserPrincipalName)"
@@ -125,24 +126,18 @@ LogWrite -LogOnly "Processing $($user.Name), $($user.UserPrincipalName)"
     {
             # Create a new instance of a .Net object
 
-        $mbx = New-Object System.Object
+        $User = New-Object System.Object
 
         # Add user-defined customs members: the records retrieved with the three PowerShell commands
 
-        $mbx | Add-Member -MemberType NoteProperty -Value $stats.Displayname -Name DisplayName
-        $mbx | Add-Member -MemberType NoteProperty -Value $mail.OrganizationalUnit -Name OrganizationalUnit
-        $mbx | Add-Member -MemberType NoteProperty -Value $mail.database -Name Database
-        $mbx | Add-Member -MemberType NoteProperty -Value $mail.Alias -Name Alias
-        $mbx | Add-Member -MemberType NoteProperty -Value $mail.Samaccountname -Name Samaccountname
-        $mbx | Add-Member -MemberType NoteProperty -Value $mail.PrimarySmtpAddress -Name PrimarySmtpAddress
-        $mbx | Add-Member -MemberType NoteProperty -value $mail.issuewarningquota -Name WarningQuota
-        $mbx | Add-Member -MemberType NoteProperty -value $mail.prohibitsendquota -Name ProhibitSendQuota
-        $mbx | Add-Member -MemberType NoteProperty -value $mail.ProhibitSendReceiveQuota -Name ProhibitSendReceiveQuota
-        $mbx | Add-Member -MemberType NoteProperty -Value $stats.TotalItemSize.value.ToMB() -Name TotalSizeMB
+        $User | Add-Member -MemberType NoteProperty -Value $user.name -Name AIABizName
+        $User | Add-Member -MemberType NoteProperty -Value $user.Samaccountname -Name LANID
+        $User | Add-Member -MemberType NoteProperty -Value $AADDSUser.UserPrincipalName -Name AADDSUPN
+        $User | Add-Member -MemberType NoteProperty -Value $AADDSUser.SID -Name AADDSSID
 
-        # Add right hand operand to value of variable ($mbx) and place result in variable ($mbxStats)
+        # Add right hand operand to value of variable ($User) and place result in variable ($UserStats)
 
-        $mbxStats += $mbx
+        $UserStats += $User
     }
     else
     {
