@@ -15,21 +15,23 @@
     and logs information to a log file in the working directory. If you run this script as a scheduled task, you need to specify the credentials as an encrypted file.
     https://blogs.technet.microsoft.com/robcost/2008/05/01/powershell-tip-storing-and-using-password-credentials/
 .EXAMPLE
-   '.\ExportSIDfromAADDS.ps1' -SourceCSVFilePath C:\Temp\SageUsers.csv -DisabledOU "OU=Disabled Users,DC=Contoso,DC=Com" -NewUserOU "OU=New Users,DC=Contoso,DC=Com" -ADServer "DC01"
+   '.\ExportSIDfromAADDS.ps1' -SourceCSVFilePath C:\Temp\SageUsers.csv -UsersOU "OU=Disabled Users,DC=Contoso,DC=Com" -OutputCSV "OU=New Users,DC=Contoso,DC=Com" -ADServer "DC01"
 
 .PARAMETER SourceCSVFilePath
  Specify the path or UNC path to the CSV source file. Mandatory Parameter. If there is no file in the path, the script will end. 
  If you don't specify a path, the script will ERROR:
  "Cannot bind argument to parameter 'Path' because it is an empty string."
 
-.PARAMETER DisabledOU
- Specify the Distinguished name (DN) of the OU in AD where you want to move disabled users to. Mandatory.
+.PARAMETER UsersOU
+ Specify the Distinguished name (DN) of the OU in AAD DS where you want to query the values from. Mandatory.
 
-.PARAMETER NewUserOU
- Specify the Distinguished name (DN) of the OU in AD where you want to CREATE new users. Mandatory.
+.PARAMETER OutputCSV
+ Specify the path or UNC path to the CSV output file. Mandatory Parameter.
 
 .OUTPUTS
    Log file with date and time in the file name.
+   Output CSV file
+
 .NOTES
    Before running this script in Production Active Directory, test it in a Development environment!!
    It is strongly suggested that the script is run on a dedicated Windows machine that is a member of the domain, but NOT on a domain controller.
@@ -50,14 +52,12 @@ Param(
     [alias("Csv")]
     $SourceCSVFilePath,
     [parameter(Mandatory = $True)]
-    [alias("DisableOu")]
-    $DisabledOU,
+    [alias("UserOU")]
+    $UsersOU,
     [parameter(Mandatory = $True)]
-    [alias("NewOu")]
-    $NewUserOU,
-    [parameter(Mandatory = $True)]
-    [alias("DomainController")]
-    $ADServer)
+    [alias("Export")]
+    $OutputCSV
+    )
 
 $credentials = Get-Credential #If the script is set to run as a scheduled task you need to replace this with the secure password file process.
 
@@ -162,8 +162,8 @@ If (Test-Path $SourceCSVFilePath) {
                 Set-ADUser $disabeUser -Enabled $false -Manager $UserManagerDN -Credential $credentials
                 Set-ADUser $disabeUser -Replace @{AdminDescription = "PowerShell disabled on $(Get-Date) from $($env:COMPUTERNAME)"; employeeType = "$contractType"} -Credential $credentials
                 LogWrite "        - Disabled $($user.EMPLID_0)"
-                Move-ADObject  $disabeUser -TargetPath $DisabledOU -Confirm:$false -Credential $credentials -ErrorAction Stop
-                LogWrite "        - Moved AD user $($disabeUser.DistinguishedName) to $($DisabledOU)"
+                Move-ADObject  $disabeUser -TargetPath $UsersOU -Confirm:$false -Credential $credentials -ErrorAction Stop
+                LogWrite "        - Moved AD user $($disabeUser.DistinguishedName) to $($UsersOU)"
                 LogWrite -LogOnly "-------------------------------------------------------------------------------"
                 $DisabledCount += 1
             }
@@ -175,8 +175,8 @@ If (Test-Path $SourceCSVFilePath) {
                     Set-ADUser $disabeUser -Enabled $false -Manager $UserManagerDN -Credential $credentials
                     Set-ADUser $disabeUser -Replace @{AdminDescription = "PowerShell disabled on $(Get-Date) from $($env:COMPUTERNAME)"; employeeType = "$contractType"} -Credential $credentials
                     LogWrite "        - Disabled $($disabeUser.SamAccountName)"
-                    Move-ADObject  $disabeUser -TargetPath $DisabledOU -Confirm:$false -Credential $credentials -ErrorAction Stop
-                    LogWrite "        - Moved AD user $($disabeUser.DistinguishedName) to $($DisabledOU)"
+                    Move-ADObject  $disabeUser -TargetPath $UsersOU -Confirm:$false -Credential $credentials -ErrorAction Stop
+                    LogWrite "        - Moved AD user $($disabeUser.DistinguishedName) to $($UsersOU)"
                     LogWrite -LogOnly "-------------------------------------------------------------------------------"
                     $DisabledCount += 1
                 }
@@ -270,9 +270,9 @@ If (Test-Path $SourceCSVFilePath) {
                     # Creates New User
                     try {
                         Write-Host -ForegroundColor Yellow "Creating new user from Line 273"
-                        New-ADUser -SamAccountName $User.EMPLID_0 -Name $firstname' '$LastName -UserPrincipalName "$($user.EMPLID_0)@capeunionmart.co.za" -DisplayName $FirstName' '$LastName -GivenName $firstname -Surname $LastName -EmployeeID $user.EMPLID_0 -Department $user.ETRSRV_0 -Manager $UserManagerDN -Office $office -employeeNumber $contract -MobilePhone $Mobile -Title $Title -Path $NewUserOU -AccountPassword (ConvertTo-SecureString -AsPlainText 'vNW7b}[%|y2E' -Force) -Enabled $False -Server $ADServer -Credential $credentials -ErrorAction stop
+                        New-ADUser -SamAccountName $User.EMPLID_0 -Name $firstname' '$LastName -UserPrincipalName "$($user.EMPLID_0)@capeunionmart.co.za" -DisplayName $FirstName' '$LastName -GivenName $firstname -Surname $LastName -EmployeeID $user.EMPLID_0 -Department $user.ETRSRV_0 -Manager $UserManagerDN -Office $office -employeeNumber $contract -MobilePhone $Mobile -Title $Title -Path $OutputCSV -AccountPassword (ConvertTo-SecureString -AsPlainText 'vNW7b}[%|y2E' -Force) -Enabled $False -Server $ADServer -Credential $credentials -ErrorAction stop
                         Set-ADUser $User.EMPLID_0 -Replace @{AdminDescription = "PowerShell created on $(Get-Date) from $($env:COMPUTERNAME)"; employeeType = "$contractType"} -Credential $credentials
-                        LogWrite -Success "Created new user $($User.EMPLID_0) in $($NewUserOU)"
+                        LogWrite -Success "Created new user $($User.EMPLID_0) in $($OutputCSV)"
                         LogWrite -LogOnly "-------------------------------------------------------------------------------"
                         $NewUsersCount += 1
                     }
@@ -280,9 +280,9 @@ If (Test-Path $SourceCSVFilePath) {
                         Logwrite -Err "Name already exists, appending character to mitigate duplication in the Name"
                         try {
                             Write-host -ForegroundColor Yellow "Creating new user from Line 283"
-                            New-ADUser -SamAccountName $User.EMPLID_0 -Name $firstname' '$LastName' ('$($User.EMPLID_0)')' -UserPrincipalName "$($user.EMPLID_0)@capeunionmart.co.za" -DisplayName $FirstName' '$LastName' ('$($User.EMPLID_0)')' -GivenName $firstname -Surname $LastName -EmployeeID $user.EMPLID_0 -Department $user.ETRSRV_0 -Manager $UserManagerDN -Office $office -employeeNumber $contract -MobilePhone $Mobile -Title $Title -Path $NewUserOU -AccountPassword (ConvertTo-SecureString -AsPlainText 'vNW7b}[%|y2E' -Force) -Enabled $False -Server $ADServer -Credential $credentials -ErrorAction stop
+                            New-ADUser -SamAccountName $User.EMPLID_0 -Name $firstname' '$LastName' ('$($User.EMPLID_0)')' -UserPrincipalName "$($user.EMPLID_0)@capeunionmart.co.za" -DisplayName $FirstName' '$LastName' ('$($User.EMPLID_0)')' -GivenName $firstname -Surname $LastName -EmployeeID $user.EMPLID_0 -Department $user.ETRSRV_0 -Manager $UserManagerDN -Office $office -employeeNumber $contract -MobilePhone $Mobile -Title $Title -Path $OutputCSV -AccountPassword (ConvertTo-SecureString -AsPlainText 'vNW7b}[%|y2E' -Force) -Enabled $False -Server $ADServer -Credential $credentials -ErrorAction stop
                             Set-ADUser $User.EMPLID_0 -Replace @{AdminDescription = "PowerShell created on $(Get-Date) from $($env:COMPUTERNAME)"; employeeType = "$contractType"} -Credential $credentials
-                            LogWrite -Success "Created new user $firstname $LastName ($($User.EMPLID_0)) in $($NewUserOU)"
+                            LogWrite -Success "Created new user $firstname $LastName ($($User.EMPLID_0)) in $($OutputCSV)"
                             LogWrite -LogOnly "-------------------------------------------------------------------------------"
                             $NewUsersCount += 1
                         }
