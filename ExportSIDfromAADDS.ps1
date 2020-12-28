@@ -53,7 +53,7 @@ Param(
     $SourceCSVFilePath,
     [parameter(Mandatory = $True)]
     [alias("UserOU")]
-    $UsersOU,
+    $UsersOU = "OU=AADDC Users,DC=mattchattaadds,DC=onmicrosoft,DC=com",
     [parameter(Mandatory = $True)]
     [alias("Export")]
     $OutputCSV
@@ -95,7 +95,8 @@ Function LogWrite {
 }
 
 LogWrite (Get-Date)
-If (Test-Path $SourceCSVFilePath) {
+If (Test-Path $SourceCSVFilePath) 
+ {
     $AIABizUsers = @(Import-Csv $SourceCSVFilePath)
 
     LogWrite ("Number of users in the CSV: " + $AIABizUsers.Count)
@@ -126,225 +127,30 @@ LogWrite -LogOnly "Processing $($user.Name), $($user.UserPrincipalName)"
     {
             # Create a new instance of a .Net object
 
-        $User = New-Object System.Object
+        $item = New-Object System.Object
 
         # Add user-defined customs members: the records retrieved with the three PowerShell commands
 
-        $User | Add-Member -MemberType NoteProperty -Value $user.name -Name AIABizName
-        $User | Add-Member -MemberType NoteProperty -Value $user.Samaccountname -Name LANID
-        $User | Add-Member -MemberType NoteProperty -Value $AADDSUser.UserPrincipalName -Name AADDSUPN
-        $User | Add-Member -MemberType NoteProperty -Value $AADDSUser.SID -Name AADDSSID
+        $item | Add-Member -MemberType NoteProperty -Value $user.Name -Name AIABizName
+        $item | Add-Member -MemberType NoteProperty -Value $user.Samaccountname -Name LANID
+        $item | Add-Member -MemberType NoteProperty -Value $AADDSUser.UserPrincipalName -Name AADDSUPN
+        $item | Add-Member -MemberType NoteProperty -Value $AADDSUser.SID -Name AADDSSID
 
-        # Add right hand operand to value of variable ($User) and place result in variable ($UserStats)
+        # Add right hand operand to value of variable ($item) and place result in variable ($UserStats)
 
-        $UserStats += $User
+        $UserStats += $item
     }
     else
     {
             LogWrite -Err "        -AD User doesn't exsist or can't be found: $($user.Userprincipalname)"
     }
-        }
-}
+        
 
- #region Disabled for testing
- <#
-    foreach ($user in $AIABizUsers) {
-        LogWrite -LogOnly "Processing $($user.EMPLID_0), $($user.NAM_0) $($user.SURNAME_0)"
-        $UserManagerDN = $null
-        $department = $null
-        $office = $user.FCY_0
-        switch ($office) {
-            {[string]::IsNullOrEmpty($office)} {$office = "NotSet"; LogWrite "No Office value for $($user.EMPLID_0), setting Office attribute in AD to 'NotSet'"; break}
-            {$office -ne $null} {LogWrite -Success "Office is not blank"}
-        }
-        $Title = $user.POSDES_0
-        switch ($Title) {
-            {[string]::IsNullOrEmpty($Title)} {$Title = "NotSet"; LogWrite "No Title value for $($user.EMPLID_0), setting Title attribute in AD to 'NotSet'"; break}
-            {$Title -ne $null} {LogWrite -Success "Title is not blank"}
-        }
-        $contract = $user.CTRNUM_0
-        switch ($contract) {
-            {[string]::IsNullOrEmpty($contract)} {$contract = "NotSet"; LogWrite "No Contract value for $($user.EMPLID_0), setting Contract attribute in AD to 'NotSet'"; break}
-            {$contract -ne $null} {LogWrite -Success "Contract is not blank"}
-        }
-        $contractType = $user.NATCON_0
-        switch ($contractType) {
-            {[string]::IsNullOrEmpty($contractType)} {$contractType = "NotSet"; LogWrite "No Contract Type value for $($user.EMPLID_0), setting EmployeeType attribute in AD to 'NotSet'"; break}
-            {$contractType -ne $null} {LogWrite -Success "Contract Type is not blank"}
-        }
-        $Mobile = $user.MOBILE_0
-        switch ($Mobile) {
-            {[string]::IsNullOrEmpty($Mobile)} {$Mobile = "0"; LogWrite "No Mobile value for $($user.EMPLID_0), setting MobilePhone attribute in AD to '0'"; break}
-            {$Mobile -ne $null} {LogWrite -Success "Mobile is not blank"}
-        }
-        Try {
-            $UserManagerDN = Get-ADUser -Filter "SamAccountName -eq '$($user.CHEFCTR_0)'" -ErrorAction Stop
-        }
-        catch {
-            LogWrite "No Manager value for $($user.EMPLID_0)"
-        }
-        
-        if ($user.STA_0 -eq "R") {
-            LogWrite "$($user.EMPLID_0) is flagged for deletion, disabling account in AD..."
-            $firlas = $user.NAM_0.Substring(0, 3) + $user.SURNAME_0.Substring(0, 3)
-
-            # Disables user if found using employee ID
-            try {  
-                $disabeUser = (Get-ADUser -Filter "SamAccountName -eq '$($user.EMPLID_0)'" -Credential $credentials -ErrorAction Stop)
-                Set-ADUser $disabeUser -Enabled $false -Manager $UserManagerDN -Credential $credentials
-                Set-ADUser $disabeUser -Replace @{AdminDescription = "PowerShell disabled on $(Get-Date) from $($env:COMPUTERNAME)"; employeeType = "$contractType"} -Credential $credentials
-                LogWrite "        - Disabled $($user.EMPLID_0)"
-                Move-ADObject  $disabeUser -TargetPath $UsersOU -Confirm:$false -Credential $credentials -ErrorAction Stop
-                LogWrite "        - Moved AD user $($disabeUser.DistinguishedName) to $($UsersOU)"
-                LogWrite -LogOnly "-------------------------------------------------------------------------------"
-                $DisabledCount += 1
-            }
-            catch {
-                
-                # Disables user if found using FirLas
-                try {
-                    $disabeUser = Get-ADUser $firlas -Credential $credentials -ErrorAction Stop
-                    Set-ADUser $disabeUser -Enabled $false -Manager $UserManagerDN -Credential $credentials
-                    Set-ADUser $disabeUser -Replace @{AdminDescription = "PowerShell disabled on $(Get-Date) from $($env:COMPUTERNAME)"; employeeType = "$contractType"} -Credential $credentials
-                    LogWrite "        - Disabled $($disabeUser.SamAccountName)"
-                    Move-ADObject  $disabeUser -TargetPath $UsersOU -Confirm:$false -Credential $credentials -ErrorAction Stop
-                    LogWrite "        - Moved AD user $($disabeUser.DistinguishedName) to $($UsersOU)"
-                    LogWrite -LogOnly "-------------------------------------------------------------------------------"
-                    $DisabledCount += 1
-                }
-                catch {
-                    LogWrite -Err "        -AD User doesn't exsist or can't be found: $($user.EMPLID_0)"
-                    LogWrite -LogOnly "        -Skipping $($user.EMPLID_0)"
-                    LogWrite -LogOnly "-------------------------------------------------------------------------------"
-                    $FaileduserCount += 1
-                }
-            }
-      
-      
-        }
-
-        #   Sets an existing user's details
-        else {
-            $ADUser = Get-ADUser -Filter "SamAccountName -eq '$($user.EMPLID_0)'" -Credential $credentials
-            if ($user.EMPLID_0 -eq $ADUser.SamAccountName) {
-                LogWrite "User: $($ADUser.SamAccountName) ($($ADUser.GivenName) $($ADUser.Surname)) matches: $($user.EMPLID_0). Updating Details..."
-                try {
-                    Write-Host -ForegroundColor Yellow "Trying to update user from Line 205"
-                    $department = $user.ETRSRV_0
-                    switch ($department) {
-                        '' {
-                            Write-host -ForegroundColor Magenta "Setting user with no Department";
-                            Set-ADUser $ADUser -EmployeeID $user.EMPLID_0 -GivenName $User.NAM_0 -Surname $user.SURNAME_0 -Manager $UserManagerDN -Office $office -employeeNumber $contract -MobilePhone $Mobile -Title $Title -Credential $credentials -ErrorAction Stop;
-                            Set-ADUser $ADUser -Replace @{AdminDescription = "PowerShell modified on $(Get-Date) from $($env:COMPUTERNAME)"; employeeType = "$contractType"} -Credential $credentials
-                            LogWrite -Success "Updated $($ADUser.DistinguishedName) details in AD";
-                            $UpdatedUsersCount += 1;
-                            LogWrite -LogOnly "-------------------------------------------------------------------------------"; Break
-                        }
-                        {$department -ne $null} {
-                            Write-host -ForegroundColor Green "Setting user with department value";
-                            Set-ADUser $ADUser -EmployeeID $user.EMPLID_0 -GivenName $User.NAM_0 -Surname $user.SURNAME_0 -Department $user.ETRSRV_0 -Manager $UserManagerDN -Office $office -employeeNumber $contract -MobilePhone $Mobile -Title $Title -Credential $credentials -ErrorAction Stop;
-                            Set-ADUser $ADUser -Replace @{AdminDescription = "PowerShell modified on $(Get-Date) from $($env:COMPUTERNAME)"; employeeType = "$contractType"} -Credential $credentials
-                            LogWrite -Success "Updated $($ADUser.DistinguishedName) details in AD";
-                            $UpdatedUsersCount += 1;
-                            LogWrite -LogOnly "-------------------------------------------------------------------------------"
-                        }
-    
-                    }
-                    
-                    
-                }
-                catch { 
-                    LogWrite -Err "        -Unable to update user in AD: $($user.EMPLID_0). Consult the log file $($Logfile)"
-                    LogWrite -LogOnly "        -$($Error.Item(0).categoryInfo)"
-                    LogWrite -LogOnly "-------------------------------------------------------------------------------"
-                    $FaileduserCount += 1
-                }
-        
-        
-                    
-            }
-    
-            #  Sets an existing AD users found with FirLas account naming convention
-            else {
-                $NonADuser = @()
-                $firlas = $user.NAM_0.Substring(0, 3) + $user.SURNAME_0.Substring(0, 3)
-                try {
-                    Write-Host -ForegroundColor Yellow "Trying to update user from Line 246"
-                    $NonADuser = Get-ADUser $firlas -Credential $credentials -ErrorAction SilentlyContinue
-                    $department = $user.ETRSRV_0
-                    switch ($department) {
-                        '' {
-                            Write-host -ForegroundColor Magenta "Setting user with no Department";
-                            Set-ADUser $NonADuser -EmployeeID $user.EMPLID_0 -GivenName $User.NAM_0 -Surname $user.SURNAME_0 -Manager $UserManagerDN -Office $office -employeeNumber $contract -MobilePhone $Mobile -Title $Title -Credential $credentials -ErrorAction Stop;
-                            Set-ADUser $NonADuser -Replace @{AdminDescription = "PowerShell modified on $(Get-Date) from $($env:COMPUTERNAME)"; employeeType = "$contractType"} -Credential $credentials;
-                            Logwrite -Success "Found a user in AD $($NonADuser.SamAccountName) that matches the OLD username format of FIRLAS, updating details but not SamAccountName...";
-                            LogWrite -Success "Updated $($NonADuser.DistinguishedName) details in AD";
-                            $UpdatedUsersCount += 1;
-                            LogWrite -LogOnly "-------------------------------------------------------------------------------"; Break
-                        }
-                        {$department -ne $null} {
-                            Write-host -ForegroundColor Green "Setting user with department value";
-                            Set-ADUser $NonADuser -EmployeeID $user.EMPLID_0 -GivenName $User.NAM_0 -Surname $user.SURNAME_0 -Department $user.ETRSRV_0 -Manager $UserManagerDN -Office $office -employeeNumber $contract -MobilePhone $Mobile -Title $Title -Credential $credentials -ErrorAction Stop;
-                            Set-ADUser $NonADuser -Replace @{AdminDescription = "PowerShell modified on $(Get-Date) from $($env:COMPUTERNAME)"; employeeType = "$contractType"} -Credential $credentials;
-                            Logwrite -Success "Found a user in AD $($NonADuser.SamAccountName) that matches the OLD username format of FIRLAS, updating details but not SamAccountName...";
-                            LogWrite -Success "Updated $($NonADuser.DistinguishedName) details in AD";
-                            $UpdatedUsersCount += 1;
-                            LogWrite -LogOnly "-------------------------------------------------------------------------------"
-                        }
-                            
-                    }
-                }
-                catch {}
-                if (!($NonADuser)) {
-                    $firstname = $user.NAM_0
-                    $LastName = $user.SURNAME_0
-                    
-                    # Creates New User
-                    try {
-                        Write-Host -ForegroundColor Yellow "Creating new user from Line 273"
-                        New-ADUser -SamAccountName $User.EMPLID_0 -Name $firstname' '$LastName -UserPrincipalName "$($user.EMPLID_0)@capeunionmart.co.za" -DisplayName $FirstName' '$LastName -GivenName $firstname -Surname $LastName -EmployeeID $user.EMPLID_0 -Department $user.ETRSRV_0 -Manager $UserManagerDN -Office $office -employeeNumber $contract -MobilePhone $Mobile -Title $Title -Path $OutputCSV -AccountPassword (ConvertTo-SecureString -AsPlainText 'vNW7b}[%|y2E' -Force) -Enabled $False -Server $ADServer -Credential $credentials -ErrorAction stop
-                        Set-ADUser $User.EMPLID_0 -Replace @{AdminDescription = "PowerShell created on $(Get-Date) from $($env:COMPUTERNAME)"; employeeType = "$contractType"} -Credential $credentials
-                        LogWrite -Success "Created new user $($User.EMPLID_0) in $($OutputCSV)"
-                        LogWrite -LogOnly "-------------------------------------------------------------------------------"
-                        $NewUsersCount += 1
-                    }
-                    catch {
-                        Logwrite -Err "Name already exists, appending character to mitigate duplication in the Name"
-                        try {
-                            Write-host -ForegroundColor Yellow "Creating new user from Line 283"
-                            New-ADUser -SamAccountName $User.EMPLID_0 -Name $firstname' '$LastName' ('$($User.EMPLID_0)')' -UserPrincipalName "$($user.EMPLID_0)@capeunionmart.co.za" -DisplayName $FirstName' '$LastName' ('$($User.EMPLID_0)')' -GivenName $firstname -Surname $LastName -EmployeeID $user.EMPLID_0 -Department $user.ETRSRV_0 -Manager $UserManagerDN -Office $office -employeeNumber $contract -MobilePhone $Mobile -Title $Title -Path $OutputCSV -AccountPassword (ConvertTo-SecureString -AsPlainText 'vNW7b}[%|y2E' -Force) -Enabled $False -Server $ADServer -Credential $credentials -ErrorAction stop
-                            Set-ADUser $User.EMPLID_0 -Replace @{AdminDescription = "PowerShell created on $(Get-Date) from $($env:COMPUTERNAME)"; employeeType = "$contractType"} -Credential $credentials
-                            LogWrite -Success "Created new user $firstname $LastName ($($User.EMPLID_0)) in $($OutputCSV)"
-                            LogWrite -LogOnly "-------------------------------------------------------------------------------"
-                            $NewUsersCount += 1
-                        }
-                        catch {
-                            LogWrite -Err "        -Unable to add user in AD: $($user.EMPLID_0). Consult the log file $($Logfile)"
-                            LogWrite -LogOnly "        -$($Error.Item(0).categoryInfo)"
-                            LogWrite -LogOnly "-------------------------------------------------------------------------------"
-                            $FaileduserCount += 1
-                        }
-                    }
-                }
-        
-            }
-        }  
+        $UserStats | Export-Csv -Path $OutputCSV -NoTypeInformation
     }
-
-
-    LogWrite "Disabled Users:    |$($DisabledCount)"
-    Logwrite "New Users:         |$($NewUsersCount)"
-    Logwrite "Updated Users:     |$($UpdatedUsersCount)"
-    Logwrite "Failed Users:      |$($FaileduserCount)"
-    Logwrite "Rows in CSV:       |$($AIABizUsers.Count)"
-    LogWrite "$(Get-Date)"
-
-#>
-#endregion Disabled for testing
 }
-
 Else {
     Write-Host ""
-    Write-Host "There's no user csv list to work with."
+    Write-Host "There's no source user csv list to work with."
     Write-Host ""
 }
