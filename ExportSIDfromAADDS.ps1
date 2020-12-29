@@ -52,7 +52,7 @@ Param(
     [alias("Csv")]
     $SourceCSVFilePath,
     [parameter(Mandatory = $True)]
-    [alias("FQDN")]
+    [alias("FullQDN")]
     $FQDN,
     [parameter(Mandatory = $True)]
     [alias("Export")]
