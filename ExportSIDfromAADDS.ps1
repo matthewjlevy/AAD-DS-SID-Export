@@ -15,14 +15,14 @@
     and logs information to a log file in the working directory. If you run this script as a scheduled task, you need to specify the credentials as an encrypted file.
     https://blogs.technet.microsoft.com/robcost/2008/05/01/powershell-tip-storing-and-using-password-credentials/
 .EXAMPLE
-   '.\ExportSIDfromAADDS.ps1' -SourceCSVFilePath C:\Temp\SageUsers.csv -UsersOU "OU=Disabled Users,DC=Contoso,DC=Com" -OutputCSV "OU=New Users,DC=Contoso,DC=Com" -ADServer "DC01"
+   '.\ExportSIDfromAADDS.ps1' -SourceCSVFilePath C:\Temp\AIAUsers.csv -Domain "OU=Disabled Users,DC=Contoso,DC=Com" -OutputCSV "OU=New Users,DC=Contoso,DC=Com" -ADServer "DC01"
 
 .PARAMETER SourceCSVFilePath
  Specify the path or UNC path to the CSV source file. Mandatory Parameter. If there is no file in the path, the script will end. 
  If you don't specify a path, the script will ERROR:
  "Cannot bind argument to parameter 'Path' because it is an empty string."
 
-.PARAMETER UsersOU
+.PARAMETER Domain
  Specify the Distinguished name (DN) of the OU in AAD DS where you want to query the values from. Mandatory.
 
 .PARAMETER OutputCSV
@@ -40,7 +40,7 @@
     * Windows 10 or Windows Server 2012/2016 as a member of the Domain.
     * Active Directory PowerShell Module
     * Windows RSAT Hotfix.(KB2693643)
-    * Service Account Credentials with Write access to Active Directory.
+    * Service Account Credentials with Read access to Active Directory.
    Enable-WindowsOptionalFeature -Online -FeatureName `
          RSATClient-Roles-AD-Powershell
 
@@ -52,8 +52,8 @@ Param(
     [alias("Csv")]
     $SourceCSVFilePath,
     [parameter(Mandatory = $True)]
-    [alias("UserOU")]
-    $UsersOU = "OU=AADDC Users,DC=mattchattaadds,DC=onmicrosoft,DC=com",
+    [alias("FQDN")]
+    $FQDN,
     [parameter(Mandatory = $True)]
     [alias("Export")]
     $OutputCSV
@@ -64,12 +64,44 @@ $credentials = Get-Credential #If the script is set to run as a scheduled task y
 $dateObj = Get-Date
 $Logfile = $PWD.Path + "\SIDExport_" + $dateObj.Year + $dateObj.Month + $dateObj.Day + $dateObj.Hour + $dateObj.Minute + $dateObj.Second + ".log"
 
-$DisabledCount = 0
-$NewUsersCount = 0
-$UpdatedUsersCount = 0
-$FaileduserCount = 0
+function Get-Domain {
+	
+	#Retrieve the Fully Qualified Domain Name if one is not supplied
+	# division.domain.root
 
+	if ($FQDN -eq "") {
+		[String]$fqdn = [System.DirectoryServices.ActiveDirectory.Domain]::getcurrentdomain()
+	}
 
+	# Create a New Array 'Item' for each item in between the '.' characters
+	# Arrayitem1 division
+	# Arrayitem2 domain
+	# Arrayitem3 root
+	$FQDNArray = $FQDN.split(".")
+	
+	# Add A Separator of ','
+	$Separator = ","
+
+	# For Each Item in the Array
+	# for (CreateVar; Condition; RepeatAction)
+	# for ($x is now equal to 0; while $x is less than total array length; add 1 to X
+	for ($x = 0; $x -lt $FQDNArray.Length ; $x++)
+		{ 
+
+		#If it's the last item in the array don't append a ','
+		if ($x -eq ($FQDNArray.Length - 1)) { $Separator = "" }
+		
+		# Append to $DN DC= plus the array item with a separator after
+		[string]$DN += "DC=" + $FQDNArray[$x] + $Separator
+		
+		# continue to next item in the array
+		}
+	
+	#return the Distinguished Name
+	return $DN
+}
+
+$TargetDN = "OU=AADDC Users,"+(Get-Domain)
 Function LogWrite {
     Param (
         [switch]$Err,
@@ -116,13 +148,12 @@ If (Test-Path $SourceCSVFilePath)
     }
 
     Import-Module ActiveDirectory
-$adusers = Get-AdUser -Filter * -Properties name,samaccountname, userprincipalname, sid
 $UserStats = @()
 
 foreach ($user in $AIABizUsers) {
 LogWrite -LogOnly "Processing $($user.Name), $($user.UserPrincipalName)"
     $AADDSUser = @()
-    $AADDSUser = Get-ADUser -Filter "UserPrincipalName -eq '$($user.Userprincipalname)'" |Select SID, UserPrincipalName, SamAccountName
+    $AADDSUser = Get-ADUser -Filter "UserPrincipalName -eq '$($user.Userprincipalname)'" -SearchBase $TargetDN -credential $credentials |Select SID, UserPrincipalName, SamAccountName
     if ($AADDSUser)
     {
             # Create a new instance of a .Net object
