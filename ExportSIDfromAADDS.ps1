@@ -15,7 +15,7 @@
     and logs information to a log file in the working directory. If you run this script as a scheduled task, you need to specify the credentials as an encrypted file.
     https://blogs.technet.microsoft.com/robcost/2008/05/01/powershell-tip-storing-and-using-password-credentials/
 .EXAMPLE
-   '.\ExportSIDfromAADDS.ps1' -SourceCSVFilePath C:\Temp\AIAUsers.csv -Domain "OU=Disabled Users,DC=Contoso,DC=Com" -OutputCSV "OU=New Users,DC=Contoso,DC=Com" -ADServer "DC01"
+   '.\ExportSIDfromAADDS.ps1' -SourceCSVFilePath C:\Temp\AIAUsers.csv -Domain contsoaadds.com -OutputCSV C:\Temp\AADDSSid.csv
 
 .PARAMETER SourceCSVFilePath
  Specify the path or UNC path to the CSV source file. Mandatory Parameter. If there is no file in the path, the script will end. 
@@ -53,7 +53,7 @@ Param(
     $SourceCSVFilePath,
     [parameter(Mandatory = $True)]
     [alias("FullQDN")]
-    $FQDN,
+    $Domain,
     [parameter(Mandatory = $True)]
     [alias("Export")]
     $OutputCSV
@@ -69,15 +69,15 @@ function Get-Domain {
 	#Retrieve the Fully Qualified Domain Name if one is not supplied
 	# division.domain.root
 
-	if ($FQDN -eq "") {
-		[String]$fqdn = [System.DirectoryServices.ActiveDirectory.Domain]::getcurrentdomain()
+	if ($Domain -eq $null) {
+		[String]$Domain = [System.DirectoryServices.ActiveDirectory.Domain]::getcurrentdomain()
 	}
 
 	# Create a New Array 'Item' for each item in between the '.' characters
 	# Arrayitem1 division
 	# Arrayitem2 domain
 	# Arrayitem3 root
-	$FQDNArray = $FQDN.split(".")
+	$FQDNArray = $Domain.split(".")
 	
 	# Add A Separator of ','
 	$Separator = ","
@@ -102,6 +102,7 @@ function Get-Domain {
 }
 
 $TargetDN = "OU=AADDC Users,"+(Get-Domain)
+
 Function LogWrite {
     Param (
         [switch]$Err,
@@ -151,34 +152,53 @@ If (Test-Path $SourceCSVFilePath)
 $UserStats = @()
 
 foreach ($user in $AIABizUsers) {
-LogWrite -LogOnly "Processing $($user.Name), $($user.UserPrincipalName)"
     $AADDSUser = @()
-    $AADDSUser = Get-ADUser -Filter "UserPrincipalName -eq '$($user.Userprincipalname)'" -SearchBase $TargetDN -credential $credentials |Select SID, UserPrincipalName, SamAccountName
-    if ($AADDSUser)
-    {
-            # Create a new instance of a .Net object
-
-        $item = New-Object System.Object
-
-        # Add user-defined customs members: the records retrieved with the three PowerShell commands
-
-        $item | Add-Member -MemberType NoteProperty -Value $user.Name -Name AIABizName
-        $item | Add-Member -MemberType NoteProperty -Value $user.Samaccountname -Name LANID
-        $item | Add-Member -MemberType NoteProperty -Value $AADDSUser.UserPrincipalName -Name AADDSUPN
-        $item | Add-Member -MemberType NoteProperty -Value $AADDSUser.SID -Name AADDSSID
-
-        # Add right hand operand to value of variable ($item) and place result in variable ($UserStats)
-
-        $UserStats += $item
-    }
+    if ($user.SamAccountName)
+        {
+            try
+            {
+                $AADDSUser = Get-ADUser -Filter "UserPrincipalName -eq '$($user.Userprincipalname)'" -SearchBase $TargetDN -Credential $credentials -ErrorAction Stop |Select SID, UserPrincipalName, SamAccountName
+            }
+            catch
+            {
+                LogWrite -Err "Unable to search for this type of user $($user.SamAccountName)"
+            }
+        }
     else
-    {
-            LogWrite -Err "        -AD User doesn't exsist or can't be found: $($user.Userprincipalname)"
-    }
+        {
+            LogWrite -Err "SamAccountName can not be empty for $($user.Name)"      
+        }
+        if ($AADDSUser)
+        {
+                # Create a new instance of a .Net object
+
+            $item = New-Object System.Object
+
+            # Add user-defined customs members: the records retrieved with the three PowerShell commands
+
+            $item | Add-Member -MemberType NoteProperty -Value $user.Name -Name AIABizName
+            $item | Add-Member -MemberType NoteProperty -Value $user.Samaccountname -Name LANID
+            $item | Add-Member -MemberType NoteProperty -Value $AADDSUser.UserPrincipalName -Name AADDSUPN
+            $item | Add-Member -MemberType NoteProperty -Value $AADDSUser.SID -Name AADDSSID
+
+            # Add right hand operand to value of variable ($item) and place result in variable ($UserStats)
+            #LogWrite -LogOnly "Received SID information for $($user.SamAccountName) successfully"
+            $UserStats += $item
+        }
+        else
+        {
+                LogWrite -Err "        -AD User doesn't exsist or can't be found in $($TargetDN) : $($user.Userprincipalname)"
+        }
         
 
-        $UserStats | Export-Csv -Path $OutputCSV -NoTypeInformation
-    }
+            $UserStats | Export-Csv -Path $OutputCSV -NoTypeInformation
+        }
+
+        LogWrite -LogOnly "-------------------------------------------------------------------------------"
+        Logwrite "Rows in $($SourceCSVFilePath):      |$($AIABizUsers.Count)"
+        Logwrite "Rows exported to CSV:                  |$($UserStats.Count)"
+        LogWrite "$(Get-Date)"
+
 }
 Else {
     Write-Host ""
