@@ -25,7 +25,7 @@ Download the PowerShell script from [Github](https://github.com/matthewjlevy/AAD
 # Run the script
 EXAMPLE
 
-   '.\ExportSIDfromAADDS.ps1' -SourceCSVFilePath C:\Temp\AIAUsers.csv -Domain contsoaadds.com -OutputCSV C:\Temp\AADDSSid.csv
+   '.\ExportSIDfromAADDS.ps1' -SourceCSVFilePath C:\Temp\ContosoUsers.csv -Domain contsoaadds.com -OutputCSV C:\Temp\AADDSSid.csv
 
 Keywords: AD Export, CSV, NBConsult
 
