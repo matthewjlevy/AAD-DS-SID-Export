@@ -7,7 +7,7 @@ If you run this script as a scheduled task, you need to specify the credentials 
 
 
 # Getting Started
-Download the PowerShell script from [Github](https://dev.azure.com/mattchatt42/_git/Cape%20Union%20Mart#path=%2FExportSIDfromAADDS.ps1&version=GBmaster)
+Download the PowerShell script from [Github](https://github.com/matthewjlevy/AAD-DS-SID-Export/blob/master/ExportSIDfromAADDS.ps1)
 
 #   System requirements to run ExportSIDfromAADDS.ps1:
 1.	Windows 10 or Windows Server 2012/2016 as a member of the Domain.
