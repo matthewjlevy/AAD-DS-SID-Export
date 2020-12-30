@@ -59,7 +59,7 @@ Param(
     $OutputCSV
     )
 
-$credentials = Get-Credential #If the script is set to run as a scheduled task you need to replace this with the secure password file process.
+#$credentials = Get-Credential #If the script is set to run as a scheduled task you need to replace this with the secure password file process.
 
 $dateObj = Get-Date
 $Logfile = $PWD.Path + "\SIDExport_" + $dateObj.Year + $dateObj.Month + $dateObj.Day + $dateObj.Hour + $dateObj.Minute + $dateObj.Second + ".log"
@@ -157,7 +157,7 @@ foreach ($user in $AIABizUsers) {
         {
             try
             {
-                $AADDSUser = Get-ADUser -Filter "UserPrincipalName -eq '$($user.Userprincipalname)'" -SearchBase $TargetDN -Credential $credentials -ErrorAction Stop |Select SID, UserPrincipalName, SamAccountName
+                $AADDSUser = Get-ADUser -Filter "UserPrincipalName -eq '$($user.Userprincipalname)'" -SearchBase $TargetDN -ErrorAction Stop |Select SID, UserPrincipalName, SamAccountName
             }
             catch
             {
