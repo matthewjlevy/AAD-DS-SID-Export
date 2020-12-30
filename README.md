@@ -7,14 +7,14 @@ If you run this script as a scheduled task, you need to specify the credentials 
 
 
 # Getting Started
-Download the PowerShell script from [Azure DevOps Repo](https://dev.azure.com/mattchatt42/_git/Cape%20Union%20Mart#path=%2FExportSIDfromAADDS.ps1&version=GBmaster)
+Download the PowerShell script from [Github](https://dev.azure.com/mattchatt42/_git/Cape%20Union%20Mart#path=%2FExportSIDfromAADDS.ps1&version=GBmaster)
 
 #   System requirements to run ExportSIDfromAADDS.ps1:
 1.	Windows 10 or Windows Server 2012/2016 as a member of the Domain.
 2.  Active Directory PowerShell Module
 3.  Windows RSAT Hotfix.(KB2693643)
     Enable-WindowsOptionalFeature -Online -FeatureName RSATClient-Roles-AD-Powershell
-4.  Service Account Credentials with read access to Azure Active Directory Domain Services.
+4.  Read access to Azure Active Directory Domain Services.
 
 
 # Test
@@ -25,8 +25,8 @@ Download the PowerShell script from [Azure DevOps Repo](https://dev.azure.com/ma
 # Run the script
 EXAMPLE
 
-   '.\ExportSIDfromAADDS.ps1' -CSVfilePath C:\Temp\SageUsers.csv -DisabledOU "OU=Disabled Users,DC=Contoso,DC=Com" -NewUserOU "OU=New Users,DC=Contoso,DC=Com" -ADServer "DC01"
+   '.\ExportSIDfromAADDS.ps1' -SourceCSVFilePath C:\Temp\AIAUsers.csv -Domain contsoaadds.com -OutputCSV C:\Temp\AADDSSid.csv
 
-Keywords: AD Update, CSV, NBConsult
+Keywords: AD Export, CSV, NBConsult
 
 # Email: support@nbconsult.co.za
