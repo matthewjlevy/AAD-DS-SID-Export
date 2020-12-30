@@ -15,7 +15,7 @@
     and logs information to a log file in the working directory. If you run this script as a scheduled task, you need to specify the credentials as an encrypted file.
     https://blogs.technet.microsoft.com/robcost/2008/05/01/powershell-tip-storing-and-using-password-credentials/
 .EXAMPLE
-   '.\ExportSIDfromAADDS.ps1' -SourceCSVFilePath C:\Temp\AIAUsers.csv -Domain contsoaadds.com -OutputCSV C:\Temp\AADDSSid.csv
+   '.\ExportSIDfromAADDS.ps1' -SourceCSVFilePath C:\Temp\ContosoUsers.csv -Domain contsoaadds.com -OutputCSV C:\Temp\AADDSSid.csv
 
 .PARAMETER SourceCSVFilePath
  Specify the path or UNC path to the CSV source file. Mandatory Parameter. If there is no file in the path, the script will end. 
@@ -51,7 +51,7 @@ Param(
     [parameter(Mandatory = $True)]
     [alias("Csv")]
     $SourceCSVFilePath,
-    [parameter(Mandatory = $True)]
+    [parameter(Mandatory = $False)]
     [alias("FullQDN")]
     $Domain,
     [parameter(Mandatory = $True)]
@@ -62,7 +62,30 @@ Param(
 #$credentials = Get-Credential #If the script is set to run as a scheduled task you need to replace this with the secure password file process.
 
 $dateObj = Get-Date
-$Logfile = $PWD.Path + "\SIDExport_" + $dateObj.Year + $dateObj.Month + $dateObj.Day + $dateObj.Hour + $dateObj.Minute + $dateObj.Second + ".log"
+$Logfile = $PWD.Path + "\SIDExport_Log_" + $dateObj.Year + $dateObj.Month + $dateObj.Day + $dateObj.Hour + $dateObj.Minute + $dateObj.Second + ".log"
+Function LogWrite {
+    Param (
+        [switch]$Err,
+        [switch]$Success,
+        [switch]$LogOnly,
+        [string]$logstring
+    
+    )
+   
+    if ($LogOnly -eq $false) {
+        if ($err) { 
+            Write-Host -ForegroundColor Red $logstring
+        }
+        elseif ($success) {
+            Write-Host -ForegroundColor Green $logstring
+        }
+        else {
+            Write-Host $logstring
+        } 
+    }
+   
+    Add-content $Logfile -value $logstring
+}
 
 function Get-Domain {
 	
@@ -71,6 +94,7 @@ function Get-Domain {
 
 	if ($Domain -eq $null) {
 		[String]$Domain = [System.DirectoryServices.ActiveDirectory.Domain]::getcurrentdomain()
+        LogWrite -LogOnly "No domain specified defaulting to current domain $($domain)"
 	}
 
 	# Create a New Array 'Item' for each item in between the '.' characters
@@ -100,39 +124,16 @@ function Get-Domain {
 	#return the Distinguished Name
 	return $DN
 }
+LogWrite (Get-Date)
 
 $TargetDN = "OU=AADDC Users,"+(Get-Domain)
 
-Function LogWrite {
-    Param (
-        [switch]$Err,
-        [switch]$Success,
-        [switch]$LogOnly,
-        [string]$logstring
-    
-    )
-   
-    if ($LogOnly -eq $false) {
-        if ($err) { 
-            Write-Host -ForegroundColor Red $logstring
-        }
-        elseif ($success) {
-            Write-Host -ForegroundColor Green $logstring
-        }
-        else {
-            Write-Host $logstring
-        } 
-    }
-   
-    Add-content $Logfile -value $logstring
-}
 
-LogWrite (Get-Date)
 If (Test-Path $SourceCSVFilePath) 
  {
-    $AIABizUsers = @(Import-Csv $SourceCSVFilePath)
+    $OnPremUsers = @(Import-Csv $SourceCSVFilePath)
 
-    LogWrite ("Number of users in the CSV: " + $AIABizUsers.Count)
+    LogWrite ("Number of users in the CSV: " + $OnPremUsers.Count)
 
     LogWrite "Checking script environment..."
     LogWrite "Loading Active Directory PowerShell Module..."
@@ -149,25 +150,29 @@ If (Test-Path $SourceCSVFilePath)
     }
 
     Import-Module ActiveDirectory
-$UserStats = @()
+$AADUserSIDS = @()
 
-foreach ($user in $AIABizUsers) {
+foreach ($user in $OnPremUsers) {
     $AADDSUser = @()
-    if ($user.SamAccountName)
-        {
-            try
-            {
+    Write-Progress -Activity "Get SID for user"
+           try
+           {
                 $AADDSUser = Get-ADUser -Filter "UserPrincipalName -eq '$($user.Userprincipalname)'" -SearchBase $TargetDN -ErrorAction Stop |Select SID, UserPrincipalName, SamAccountName
-            }
-            catch
-            {
-                LogWrite -Err "Unable to search for this type of user $($user.SamAccountName)"
-            }
-        }
-    else
-        {
-            LogWrite -Err "SamAccountName can not be empty for $($user.Name)"      
-        }
+           }
+           catch [Microsoft.ActiveDirectory.Management.ADException]
+           {
+               LogWrite -Err "SamAccountName can not be empty for $($user.Name)"
+           }
+           catch [System.ArgumentException]
+           {
+               LogWrite -Err "Incorrect Domain"
+               Break
+           }
+           catch
+           {
+               LogWrite -Err "Unknown Exception"
+           }
+
         if ($AADDSUser)
         {
                 # Create a new instance of a .Net object
@@ -176,27 +181,27 @@ foreach ($user in $AIABizUsers) {
 
             # Add user-defined customs members: the records retrieved with the three PowerShell commands
 
-            $item | Add-Member -MemberType NoteProperty -Value $user.Name -Name AIABizName
-            $item | Add-Member -MemberType NoteProperty -Value $user.Samaccountname -Name LANID
+            $item | Add-Member -MemberType NoteProperty -Value $user.Name -Name OnPremName
+            $item | Add-Member -MemberType NoteProperty -Value $user.Samaccountname -Name OnPremSamAccountName
             $item | Add-Member -MemberType NoteProperty -Value $AADDSUser.UserPrincipalName -Name AADDSUPN
             $item | Add-Member -MemberType NoteProperty -Value $AADDSUser.SID -Name AADDSSID
 
-            # Add right hand operand to value of variable ($item) and place result in variable ($UserStats)
+            # Add right hand operand to value of variable ($item) and place result in variable ($AADUserSIDS)
             #LogWrite -LogOnly "Received SID information for $($user.SamAccountName) successfully"
-            $UserStats += $item
+            $AADUserSIDS += $item
         }
         else
         {
-                LogWrite -Err "        -AD User doesn't exsist or can't be found in $($TargetDN) : $($user.Userprincipalname)"
+                LogWrite -LogOnly "        -AD User doesn't exsist or can't be found in $($TargetDN) : $($user.Userprincipalname)"
         }
         
 
-            $UserStats | Export-Csv -Path $OutputCSV -NoTypeInformation
+            $AADUserSIDS | Export-Csv -Path $OutputCSV -NoTypeInformation
         }
 
         LogWrite -LogOnly "-------------------------------------------------------------------------------"
-        Logwrite "Rows in $($SourceCSVFilePath):      |$($AIABizUsers.Count)"
-        Logwrite "Rows exported to CSV:                  |$($UserStats.Count)"
+        Logwrite "Rows in $($SourceCSVFilePath):      |$($OnPremUsers.Count)"
+        Logwrite "Rows exported to CSV:                  |$($AADUserSIDS.Count)"
         LogWrite "$(Get-Date)"
 
 }
